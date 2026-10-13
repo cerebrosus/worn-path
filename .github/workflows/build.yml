@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - 'mc/**'
+      - 'port/**'
+      - 'port/**'
   pull_request:
     branches:
       - main
@@ -26,4 +28,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build
-        run: ./gradlew build
+        run: ./gradlew :fabric:shadowJar
+
+      - name: Upload Fabric JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: worn-path-fabric-26.3
+          path: fabric/build/libs/*dev-shadow.jar
+          if-no-files-found: error
