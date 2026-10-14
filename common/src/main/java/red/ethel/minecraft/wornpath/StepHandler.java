@@ -17,6 +17,8 @@ import org.jetbrains.annotations.NotNull;
 import red.ethel.minecraft.wornpath.config.WornPathConfigManager;
 
 import java.util.Map;
+import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,6 +31,7 @@ public class StepHandler {
     private final LoadingCache<@NotNull BlockKey, AtomicInteger> stepCounts;
     private final Map<Player, BlockPos> lastPos = new ConcurrentHashMap<>();
     private final LoadingCache<@NotNull BlockPos, AtomicInteger> vegetationSteps;
+    private final Map<Player, Set<BlockPos>> vegetationCoverage = new HashMap<>();
 
     public StepHandler(Level level) {
         this.level = level;
@@ -46,17 +49,30 @@ public class StepHandler {
         if (Objects.equals(pos, lastPos.put(playerEntity, pos))) {
             return;
         }
-        // Vegetation wears away on the second visit, independently of ground wear.
-        // Include the immediate neighbours to restore the natural path width.
-        trampleVegetation(pos);
+        // A continuous traversal counts only once per vegetation block.
+        // Leaving the five-block footprint and returning counts as another visit.
+        Set<BlockPos> footprint = new HashSet<>();
+        footprint.add(pos.immutable());
         for (BlockPos neighbour : new BlockPos[]{pos.north(), pos.south(), pos.east(), pos.west()}) {
-            trampleVegetation(neighbour);
+            footprint.add(neighbour.immutable());
         }
+        Set<BlockPos> previous = vegetationCoverage.getOrDefault(playerEntity, Set.of());
+        for (BlockPos target : footprint) {
+            if (!previous.contains(target)) {
+                trampleVegetation(target);
+            }
+        }
+        vegetationCoverage.put(playerEntity, footprint);
         int stepChance = WornPathConfigManager.getStepChance();
         if (stepChance > 1 && level.getRandom().nextInt(stepChance) != 0) {
             return;
         }
         tryTransition(pos, state, playerEntity, 0);
+        // Neighbours accumulate wear on every eligible step, not only after
+        // the centre block has already converted. Limit to immediate neighbours.
+        for (BlockPos neighbour : new BlockPos[]{pos.north(), pos.south(), pos.east(), pos.west()}) {
+            tryTransition(neighbour, level.getBlockState(neighbour), playerEntity, 1);
+        }
     }
 
     private void tryTransition(BlockPos pos, BlockState state, Player playerEntity, int depth) {
@@ -104,11 +120,6 @@ public class StepHandler {
                 level.setBlockAndUpdate(pos, newState);
             }
 
-            if (depth < WornPathConfigManager.getMaxSpreadDepth()) {
-                for (BlockPos neighbourPos : new BlockPos[]{pos.north(), pos.south(), pos.east(), pos.west()}) {
-                    tryTransition(neighbourPos, level.getBlockState(neighbourPos), playerEntity, depth + 1);
-                }
-            }
         }
     }
 
