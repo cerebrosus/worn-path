@@ -12,6 +12,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 import red.ethel.minecraft.wornpath.config.WornPathConfigManager;
@@ -52,7 +53,8 @@ public class StepHandler {
     private void tryTransition(BlockPos pos, BlockState state, Player playerEntity, int depth) {
         var blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         Map<String, String> transitions = WornPathConfigManager.getTransitions();
-        if (!transitions.containsKey(blockId)) {
+        // Dirt paths are the final wear stage, including for existing configuration files.
+        if ("minecraft:dirt_path".equals(blockId) || !transitions.containsKey(blockId)) {
             return;
         }
         int stepCount = inc(blockId, pos);
@@ -72,6 +74,12 @@ public class StepHandler {
                 if (underlyingProtection.contains(belowId)) {
                     return;
                 }
+            }
+            // Trample natural vegetation before changing the ground beneath it.
+            // Crops, saplings and other planted blocks are deliberately excluded.
+            if ("minecraft:grass_block".equals(blockId) && isTrampleableVegetation(aboveState)) {
+                level.destroyBlock(pos.above(), false);
+                return;
             }
             var nextId = transitions.get(blockId);
             BlockState newState = BuiltInRegistries.BLOCK.getValue(Identifier.parse(nextId)).defaultBlockState();
@@ -99,6 +107,15 @@ public class StepHandler {
                 }
             }
         }
+    }
+
+    private boolean isTrampleableVegetation(BlockState state) {
+        String id = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+        if (Set.of("minecraft:short_grass", "minecraft:tall_grass",
+                "minecraft:fern", "minecraft:large_fern").contains(id)) {
+            return true;
+        }
+        return state.is(TagKey.create(Registries.BLOCK, Identifier.parse("minecraft:flowers")));
     }
 
     private boolean isPassableOverhead(BlockState state) {
