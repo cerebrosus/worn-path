@@ -12,7 +12,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 import red.ethel.minecraft.wornpath.config.WornPathConfigManager;
@@ -42,6 +41,12 @@ public class StepHandler {
     public void handle(Player playerEntity, BlockPos pos, BlockState state) {
         if (Objects.equals(pos, lastPos.put(playerEntity, pos))) {
             return;
+        }
+        // Vegetation wears away on first contact, before the slower ground-wear roll.
+        // Include the immediate neighbours to restore the natural path width.
+        trampleVegetation(pos);
+        for (BlockPos neighbour : new BlockPos[]{pos.north(), pos.south(), pos.east(), pos.west()}) {
+            trampleVegetation(neighbour);
         }
         int stepChance = WornPathConfigManager.getStepChance();
         if (stepChance > 1 && level.getRandom().nextInt(stepChance) != 0) {
@@ -75,12 +80,6 @@ public class StepHandler {
                     return;
                 }
             }
-            // Trample natural vegetation before changing the ground beneath it.
-            // Crops, saplings and other planted blocks are deliberately excluded.
-            if ("minecraft:grass_block".equals(blockId) && isTrampleableVegetation(aboveState)) {
-                level.destroyBlock(pos.above(), false);
-                return;
-            }
             var nextId = transitions.get(blockId);
             BlockState newState = BuiltInRegistries.BLOCK.getValue(Identifier.parse(nextId)).defaultBlockState();
             if (WornPathConfigManager.getLogConversions()) {
@@ -106,6 +105,17 @@ public class StepHandler {
                     tryTransition(neighbourPos, level.getBlockState(neighbourPos), playerEntity, depth + 1);
                 }
             }
+        }
+    }
+
+    private void trampleVegetation(BlockPos groundPos) {
+        BlockState ground = level.getBlockState(groundPos);
+        if (!ground.is(net.minecraft.world.level.block.Blocks.GRASS_BLOCK)) {
+            return;
+        }
+        BlockPos plantPos = groundPos.above();
+        if (isTrampleableVegetation(level.getBlockState(plantPos))) {
+            level.destroyBlock(plantPos, false);
         }
     }
 
