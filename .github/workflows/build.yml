@@ -6,11 +6,13 @@ on:
       - main
       - 'mc/**'
       - 'port/**'
+      - 'feature/**'
   pull_request:
     branches:
       - main
       - 'mc/**'
       - 'port/**'
+      - 'feature/**'
 
 jobs:
   build:
