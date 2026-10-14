@@ -28,12 +28,16 @@ public class StepHandler {
     private final Level level;
     private final LoadingCache<@NotNull BlockKey, AtomicInteger> stepCounts;
     private final Map<Player, BlockPos> lastPos = new ConcurrentHashMap<>();
+    private final LoadingCache<@NotNull BlockPos, AtomicInteger> vegetationSteps;
 
     public StepHandler(Level level) {
         this.level = level;
         stepCounts = Caffeine.newBuilder()
                 .maximumSize(1000)
                 .evictionListener((k, v, cause) -> WornPathMod.LOGGER.debug("evict {} {}", k, v))
+                .build(k -> new AtomicInteger());
+        vegetationSteps = Caffeine.newBuilder()
+                .maximumSize(1000)
                 .build(k -> new AtomicInteger());
         WornPathMod.LOGGER.debug("new StepHandler {} {}", level, level.getRandom());
     }
@@ -42,7 +46,7 @@ public class StepHandler {
         if (Objects.equals(pos, lastPos.put(playerEntity, pos))) {
             return;
         }
-        // Vegetation wears away on first contact, before the slower ground-wear roll.
+        // Vegetation wears away on the second visit, independently of ground wear.
         // Include the immediate neighbours to restore the natural path width.
         trampleVegetation(pos);
         for (BlockPos neighbour : new BlockPos[]{pos.north(), pos.south(), pos.east(), pos.west()}) {
@@ -114,8 +118,10 @@ public class StepHandler {
             return;
         }
         BlockPos plantPos = groundPos.above();
-        if (isTrampleableVegetation(level.getBlockState(plantPos))) {
+        if (isTrampleableVegetation(level.getBlockState(plantPos))
+                && Objects.requireNonNull(vegetationSteps.get(groundPos.immutable())).incrementAndGet() >= 2) {
             level.destroyBlock(plantPos, false);
+            vegetationSteps.invalidate(groundPos);
         }
     }
 
