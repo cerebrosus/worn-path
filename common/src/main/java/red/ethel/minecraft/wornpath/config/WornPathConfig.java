@@ -39,9 +39,6 @@ public class WornPathConfig {
         var map = new LinkedHashMap<String, String>();
         map.put("minecraft:grass_block", "minecraft:dirt_path");
         map.put("minecraft:dirt", "minecraft:dirt_path");
-        map.put("minecraft:dirt_path", "minecraft:packed_mud");
-        map.put("minecraft:coarse_dirt", "minecraft:packed_mud");
-        map.put("minecraft:packed_mud", "minecraft:mud_bricks");
         return map;
     }
 }
